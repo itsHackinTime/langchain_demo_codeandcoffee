@@ -3,7 +3,8 @@ import { ChatPromptTemplate} from "@langchain/core/prompts";
 import {RecursiveCharacterTextSplitter} from "langchain/text_splitter";
 import {StringOutputParser} from "@langchain/core/output_parsers"
 
-const text = "Look Mom no hands";
+const parser = new StringOutputParser();
+
 const splitter = new RecursiveCharacterTextSplitter({
     chunkSize: 200,
     chunkOverlap: 100,
@@ -12,31 +13,34 @@ const splitter = new RecursiveCharacterTextSplitter({
 const prompt = ChatPromptTemplate.fromMessages([
        [
         "system",
-         `You are an expert translator. Format all responses as JSON objects with two keys: "original" and "translated".`,
+         `Your name is Thomas and you are a cowboy from the year 1899. Please answer all questions in character.`,
        ],
-       ["human", `Translate "{input}" into {language}.`],
-     ]);
+       ["human", `{input}`],
+]);
 
 const model = new ChatOllama({
     baseUrl: "http://localhost:11434",
     model: "llama3",
-    verbose: true,
+    type: "json"
 })
 
 const chain = prompt.pipe(model)
 
 
-// const response = await chain.invoke({
-//        input: "I love programming",
-//        language: "German",
-//     })
-// const response = await model.invoke('Hello?')
-// console.log('hi');
 export const config = async (req, res, next) => {
-    const input = await splitter.splitText(req.body.text);
-        res.locals.chain = await chain.invoke({
-        input,
-        language: "French",
-    })
+
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Transfer-Encoding': 'chunked',
+        'Conection': 'keep-alive'
+      })
+      
+    const input = await splitter.splitText("what is your backstory?");
+    
+    for await (const chunk of await chain.pipe(parser).stream({
+        input
+    })) {
+        res.write(chunk);
+    }
     return next();
 }
